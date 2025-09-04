@@ -25,7 +25,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->version   = 2025090400;       // The current module version (Date: YYYYMMDDXX).
-$plugin->requires  = 2025040800;       // Requires this Moodle version (5.0).
+$plugin->requires  = 2022112805;       // Requires this Moodle version.
 $plugin->component = 'mod_coreiframetest'; // Full name of the plugin (used for diagnostics).
 $plugin->maturity  = MATURITY_ALPHA;
 $plugin->release   = '0.1';
