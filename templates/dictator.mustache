@@ -1,0 +1,163 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+    @template mod_coreiframetest/dictator
+
+    TODO describe template dictator
+
+    Example context (json):
+    {
+    }
+}}
+<div class="cift_audiorecorder">
+    <button type="button" class="btn btn-primary cift_audiorecorder_btn" aria-pressed="false">
+        <i class="cift_buttonicon fa fa-microphone" aria-hidden="true"></i>
+        <span class="cift_btnlabel ms-2">Record</span>
+    </button>
+</div>
+<div class="cift_audioplayers">
+</div>
+{{^element.frozen}}
+    {{#js}}
+        require(['jquery', 'core/log'], function($, log) {
+            $(function() {
+                var $root = $('.cift_audiorecorder').first();
+                var $btn = $root.find('.cift_audiorecorder_btn');
+                var $icon = $btn.find('.cift_buttonicon');
+                var $label = $btn.find('.cift_btnlabel');
+                var $players = $('.cift_audioplayers').first();
+
+                var mediaRecorder = null;
+                var chunks = [];
+                var stream = null;
+                var isRecording = false;
+
+                function pickMimeType() {
+                    var candidates = [
+                        'audio/webm;codecs=opus',
+                        'audio/webm',
+                        'audio/ogg;codecs=opus',
+                        'audio/ogg'
+                    ];
+                    if (!window.MediaRecorder || typeof MediaRecorder.isTypeSupported !== 'function') {
+                        return '';
+                    }
+                    for (var i = 0; i < candidates.length; i++) {
+                        if (MediaRecorder.isTypeSupported(candidates[i])) {
+                            return candidates[i];
+                        }
+                    }
+                    return '';
+                }
+
+                function setBtnRecordingState(recording) {
+                    isRecording = recording;
+                    if (recording) {
+                        $btn.addClass('btn-danger').removeClass('btn-primary').attr('aria-pressed', 'true');
+                        $icon.removeClass('fa-microphone').addClass('fa-stop');
+                        $label.text('Stop');
+                    } else {
+                        $btn.addClass('btn-primary').removeClass('btn-danger').attr('aria-pressed', 'false');
+                        $icon.removeClass('fa-stop').addClass('fa-microphone');
+                        $label.text('Record');
+                    }
+                }
+
+                function addPlayerForBlob(blob) {
+                    var url = URL.createObjectURL(blob);
+                    var $wrapper = $('<div class="mt-3"></div>');
+                    var $audio = $('<audio controls></audio>').attr('src', url);
+                    $wrapper.append($audio);
+                    $players.append($wrapper);
+                }
+
+                function stopStreamTracks() {
+                    try {
+                        if (stream) {
+                            stream.getTracks().forEach(function(t) { t.stop(); });
+                        }
+                    } catch (e) {
+                        // ignore
+                    }
+                }
+
+                function startRecording() {
+                    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                        $players.append('<div class="alert alert-warning mt-3">This browser does not support audio recording.</div>');
+                        return;
+                    }
+                    navigator.mediaDevices.getUserMedia({ audio: true }).then(function(s) {
+                        stream = s;
+                        chunks = [];
+                        var options = {};
+                        var mt = pickMimeType();
+                        if (mt) { options.mimeType = mt; }
+                        try {
+                            mediaRecorder = new MediaRecorder(stream, options);
+                        } catch (err) {
+                            log.warn('Failed to create MediaRecorder, retrying without options: ' + err);
+                            mediaRecorder = new MediaRecorder(stream);
+                        }
+
+                        mediaRecorder.ondataavailable = function(ev) {
+                            if (ev && ev.data && ev.data.size > 0) {
+                                chunks.push(ev.data);
+                            }
+                        };
+                        mediaRecorder.onstop = function() {
+                            var type = (mediaRecorder && mediaRecorder.mimeType) || 'audio/webm';
+                            var blob = new Blob(chunks, { type: type });
+                            addPlayerForBlob(blob);
+                            stopStreamTracks();
+                            mediaRecorder = null;
+                            setBtnRecordingState(false);
+                        };
+                        mediaRecorder.start();
+                        setBtnRecordingState(true);
+                    }).catch(function(err) {
+                        log.error('getUserMedia error: ' + err);
+                        $players.append('<div class="alert alert-danger mt-3">Microphone permission denied or unavailable.</div>');
+                        setBtnRecordingState(false);
+                    });
+                }
+
+                function stopRecording() {
+                    try {
+                        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                            mediaRecorder.stop();
+                        } else {
+                            setBtnRecordingState(false);
+                            stopStreamTracks();
+                        }
+                    } catch (e) {
+                        log.warn('Stop recording error: ' + e);
+                        setBtnRecordingState(false);
+                        stopStreamTracks();
+                    }
+                }
+
+                $btn.on('click', function() {
+                    if (isRecording) {
+                        stopRecording();
+                    } else {
+                        startRecording();
+                    }
+                });
+            });
+        });
+    {{/js}}
+{{/element.frozen}}
