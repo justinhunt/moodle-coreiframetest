@@ -39,7 +39,7 @@ class mobile {
         }
 
         // Verify course context.
-        $cm = get_coursemodule_from_id('minilesson', $cmid);
+        $cm = get_coursemodule_from_id('coreiframetest', $cmid);
         if (!$cm) {
             print_error('invalidcoursemodule');
         }

@@ -26,7 +26,7 @@ $addons = [
                     'icon' => $CFG->wwwroot . '/mod/coreiframetest/pix/icon.svg',
                     'class' => '',
                 ],
-            ]
-        ]
-    ]
+            ],
+        ],
+    ],
 ];
