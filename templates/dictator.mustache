@@ -24,9 +24,13 @@
     }
 }}
 <div class="cift_audiorecorder">
-    <button type="button" class="btn btn-primary cift_audiorecorder_btn" aria-pressed="false">
+    <button type="button" class="btn btn-primary cift_audio_btn" aria-pressed="false">
         <i class="cift_buttonicon fa fa-microphone" aria-hidden="true"></i>
-        <span class="cift_btnlabel ms-2">Record</span>
+        <span class="cift_btnlabel ms-2">Record Audio</span>
+    </button>
+    <button type="button" class="btn btn-primary cift_video_btn" aria-pressed="false">
+        <i class="cift_buttonicon fa fa-video-camera" aria-hidden="true"></i>
+        <span class="cift_btnlabel ms-2">Record Video</span>
     </button>
 </div>
 <div class="cift_audioplayers">
@@ -35,23 +39,25 @@
     {{#js}}
         require(['jquery', 'core/log'], function($, log) {
             $(function() {
-                var $root = $('.cift_audiorecorder').first();
-                var $btn = $root.find('.cift_audiorecorder_btn');
-                var $icon = $btn.find('.cift_buttonicon');
-                var $label = $btn.find('.cift_btnlabel');
-                var $players = $('.cift_audioplayers').first();
+                var $audioBtn = $('.cift_audio_btn');
+                var $videoBtn = $('.cift_video_btn');
+                var $players = $('.cift_audioplayers');
 
                 var mediaRecorder = null;
                 var chunks = [];
                 var stream = null;
                 var isRecording = false;
 
-                function pickMimeType() {
-                    var candidates = [
+                function pickMimeType(type) {
+                    var candidates = type === 'audio' ? [
                         'audio/webm;codecs=opus',
                         'audio/webm',
                         'audio/ogg;codecs=opus',
                         'audio/ogg'
+                    ] : [
+                        'video/webm;codecs=vp8,opus',
+                        'video/webm',
+                        'video/mp4'
                     ];
                     if (!window.MediaRecorder || typeof MediaRecorder.isTypeSupported !== 'function') {
                         return '';
@@ -64,25 +70,26 @@
                     return '';
                 }
 
-                function setBtnRecordingState(recording) {
+                function setBtnRecordingState($btn, recording) {
                     isRecording = recording;
                     if (recording) {
                         $btn.addClass('btn-danger').removeClass('btn-primary').attr('aria-pressed', 'true');
-                        $icon.removeClass('fa-microphone').addClass('fa-stop');
-                        $label.text('Stop');
+                        $btn.find('.cift_buttonicon').removeClass('fa-microphone fa-video-camera').addClass('fa-stop');
+                        $btn.find('.cift_btnlabel').text('Stop');
                     } else {
                         $btn.addClass('btn-primary').removeClass('btn-danger').attr('aria-pressed', 'false');
-                        $icon.removeClass('fa-stop').addClass('fa-microphone');
-                        $label.text('Record');
+                        $btn.find('.cift_buttonicon').removeClass('fa-stop').addClass($btn.hasClass('cift_audio_btn') ? 'fa-microphone' : 'fa-video-camera');
+                        $btn.find('.cift_btnlabel').text($btn.hasClass('cift_audio_btn') ? 'Record Audio' : 'Record Video');
                     }
                 }
 
-                function addPlayerForBlob(blob) {
+                function addPlayerForBlob(blob, type) {
                     var url = URL.createObjectURL(blob);
                     var $wrapper = $('<div class="mt-3"></div>');
-                    var $audio = $('<audio controls></audio>').attr('src', url);
-                    $wrapper.append($audio);
-                    $players.append($wrapper);
+                    var $media = type === 'audio' ? $('<audio controls></audio>').attr('src', url) :
+                        $('<video controls style="width: 80%; max-width: 300px"></video>').attr('src', url);
+                    $wrapper.append($media);
+                    $players.prepend($wrapper);
                 }
 
                 function stopStreamTracks() {
@@ -95,16 +102,16 @@
                     }
                 }
 
-                function startRecording() {
+                function startRecording($btn, type) {
                     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                        $players.append('<div class="alert alert-warning mt-3">This browser does not support audio recording.</div>');
+                        $players.append('<div class="alert alert-warning mt-3">This browser does not support ' + type + ' recording.</div>');
                         return;
                     }
-                    navigator.mediaDevices.getUserMedia({ audio: true }).then(function(s) {
+                    navigator.mediaDevices.getUserMedia(type === 'audio' ? { audio: true } : { video: true, audio: true }).then(function(s) {
                         stream = s;
                         chunks = [];
                         var options = {};
-                        var mt = pickMimeType();
+                        var mt = pickMimeType(type);
                         if (mt) { options.mimeType = mt; }
                         try {
                             mediaRecorder = new MediaRecorder(stream, options);
@@ -119,42 +126,49 @@
                             }
                         };
                         mediaRecorder.onstop = function() {
-                            var type = (mediaRecorder && mediaRecorder.mimeType) || 'audio/webm';
-                            var blob = new Blob(chunks, { type: type });
-                            addPlayerForBlob(blob);
+                            var blob = new Blob(chunks, { type: mediaRecorder.mimeType || (type === 'audio' ? 'audio/webm' : 'video/webm') });
+                            addPlayerForBlob(blob, type);
                             stopStreamTracks();
                             mediaRecorder = null;
-                            setBtnRecordingState(false);
+                            setBtnRecordingState($btn, false);
                         };
                         mediaRecorder.start();
-                        setBtnRecordingState(true);
+                        setBtnRecordingState($btn, true);
                     }).catch(function(err) {
                         log.error('getUserMedia error: ' + err);
-                        $players.append('<div class="alert alert-danger mt-3">Microphone permission denied or unavailable.</div>');
-                        setBtnRecordingState(false);
+                        $players.append('<div class="alert alert-danger mt-3">' + (type === 'audio' ? 'Microphone' : 'Camera or microphone') + ' permission denied or unavailable.</div>');
+                        setBtnRecordingState($btn, false);
                     });
                 }
 
-                function stopRecording() {
+                function stopRecording($btn) {
                     try {
                         if (mediaRecorder && mediaRecorder.state !== 'inactive') {
                             mediaRecorder.stop();
                         } else {
-                            setBtnRecordingState(false);
+                            setBtnRecordingState($btn, false);
                             stopStreamTracks();
                         }
                     } catch (e) {
                         log.warn('Stop recording error: ' + e);
-                        setBtnRecordingState(false);
+                        setBtnRecordingState($btn, false);
                         stopStreamTracks();
                     }
                 }
 
-                $btn.on('click', function() {
+                $audioBtn.on('click', function() {
                     if (isRecording) {
-                        stopRecording();
+                        stopRecording($audioBtn);
                     } else {
-                        startRecording();
+                        startRecording($audioBtn, 'audio');
+                    }
+                });
+
+                $videoBtn.on('click', function() {
+                    if (isRecording) {
+                        stopRecording($videoBtn);
+                    } else {
+                        startRecording($videoBtn, 'video');
                     }
                 });
             });
